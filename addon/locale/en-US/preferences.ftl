@@ -3,3 +3,13 @@ pref-enable =
     .label = Enable
 pref-input = Input
 pref-help = { $name } Build { $version } { $time }
+
+pref-marker-settings = Marker Settings
+pref-use-marker =
+    .label = Use Marker instead of pdf2text
+pref-marker-url = Marker Base URL
+pref-marker-api-key = API Key
+
+pref-webui-settings = WebUI Settings
+pref-open-webui-url = Base URL
+pref-open-webui-api-key = API Key

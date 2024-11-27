@@ -14,10 +14,16 @@ class Addon {
     };
     prefs?: {
       window: Window;
-      columns: Array<ColumnOptions>;
-      rows: Array<{ [dataKey: string]: string }>;
+      enableMarker: boolean;
+      marker: {
+        url: string;
+        apiKey: string;
+      };
+      openWebUI: {
+        url: string;
+        apiKey: string;
+      }
     };
-    dialog?: DialogHelper;
   };
   // Lifecycle hooks
   public hooks: typeof hooks;
