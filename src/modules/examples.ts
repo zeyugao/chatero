@@ -12,6 +12,12 @@ export class BasicExampleFactory {
   }
 }
 
+declare namespace Zotero {
+  interface PDFWorker {
+    getFullText: (itemID: number, maxPages: number, isPriority: boolean, password: string) => Promise<string>;
+  }
+}
+
 export class UIExampleFactory {
   static async registerReaderItemPaneSection() {
     Zotero.ItemPaneManager.registerSection({
@@ -52,13 +58,50 @@ export class UIExampleFactory {
         setSectionSummary,
         setSectionButtonStatus,
       }) => {
-        ztoolkit.log("Section rendered!", item?.id);
-        const title = body.querySelector("#test") as HTMLElement;
-        title.style.color = "red";
-        title.textContent = "LOADING";
-        setL10nArgs(`{ "status": "Loading" }`);
-        setSectionSummary("loading!");
-        setSectionButtonStatus("test", { hidden: true });
+        // ztoolkit.log("Section rendered!", item?.id);
+        // ztoolkit.log(item.toJSON());
+        // const title = body.querySelector("#test") as HTMLElement;
+        // title.style.color = "red";
+        // title.textContent = "LOADING";
+        // setL10nArgs(`{ "status": "Loading" }`);
+        // setSectionSummary("loading!");
+        // setSectionButtonStatus("test", { hidden: true });
+
+        (async () => {
+          const items = await Zotero.Items.getAll(item.libraryID);
+          // for (const item of items) {
+          //   ztoolkit.log(item.key);
+          // }
+
+          // const reader = await ztoolkit.Reader.getReader();
+          // ztoolkit.log({ _item: reader?._item });
+
+          // ztoolkit.log({ items });
+          // const filePath = item.getLocalFileURL();
+          // if (!filePath) return;
+          // const content = await Zotero.File.getContentsAsync(filePath);
+          // ztoolkit.log({ content });
+
+          const reader = await ztoolkit.Reader.getReader();
+
+          if (reader) {
+            const item = reader._item;
+
+
+            // const filePath = item.getLocalFileURL();
+            // const content = await Zotero.File.getContentsAsync(filePath);
+            // ztoolkit.log({ content });
+
+
+            if (item.isAttachment()) {
+              const contentType = item.attachmentContentType;
+              if (contentType === 'application/pdf') {
+                const content = await Zotero.PDFWorker.getFullText(item.id, null, false, '');
+                ztoolkit.log({ content });
+              }
+            }
+          }
+        })();
       },
       // Optional, can be asynchronous.
       onAsyncRender: async ({
@@ -68,15 +111,15 @@ export class UIExampleFactory {
         setSectionSummary,
         setSectionButtonStatus,
       }) => {
-        ztoolkit.log("Section secondary render start!", item?.id);
-        await Zotero.Promise.delay(1000);
-        ztoolkit.log("Section secondary render finish!", item?.id);
-        const title = body.querySelector("#test") as HTMLElement;
-        title.style.color = "green";
-        title.textContent = item.getField("title");
-        setL10nArgs(`{ "status": "Loaded" }`);
-        setSectionSummary("rendered!");
-        setSectionButtonStatus("test", { hidden: false });
+        // ztoolkit.log("Section secondary render start!", item?.id);
+        // await Zotero.Promise.delay(1000);
+        // ztoolkit.log("Section secondary render finish!", item?.id);
+        // const title = body.querySelector("#test") as HTMLElement;
+        // title.style.color = "green";
+        // title.textContent = item.getField("title");
+        // setL10nArgs(`{ "status": "Loaded" }`);
+        // setSectionSummary("rendered!");
+        // setSectionButtonStatus("test", { hidden: false });
       },
       // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
       onToggle: ({ item }) => {
