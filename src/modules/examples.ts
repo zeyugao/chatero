@@ -136,9 +136,12 @@ export class UIExampleFactory {
               body.style.lineHeight = '2';
               setL10nArgs(`{ "status": "Loading" }`);
 
-              const updatePanel = () => {
-                const innerHTML = md.render(fullResponse);
-                const iframe = ztoolkit.UI.createElement(doc, 'iframe', {
+              let iframeBody: HTMLElement | undefined = undefined;
+              let iframe: HTMLIFrameElement | undefined = undefined;
+
+              const createIframe = () => {
+                const innerHTML = '<div>Loading...</div>';
+                iframe = ztoolkit.UI.createElement(doc, 'iframe', {
                 });
                 iframe.srcdoc = `
                 <!DOCTYPE html>
@@ -166,16 +169,30 @@ export class UIExampleFactory {
                 }
 
                 setTimeout(() => {
-                  const body = iframe.contentDocument?.body;
-                  const height = (body?.scrollHeight || 0) + 30;
-                  iframe.style.height = `${height}px`;
+                  if (iframe) {
+                    iframeBody = iframe.contentDocument?.body;
+                  } else {
+                    ztoolkit.log('Failed to create iframe!');
+                  }
                 }, 100);
               }
+              createIframe();
 
               let previousTextLength = 0;
               let responseBuffer = '';
               let fullResponse = '';
               let lastResponseTime = Date.now();
+
+              const updateIframe = () => {
+                if (iframeBody && iframe) {
+                  const innerHTML = md.render(fullResponse);
+                  iframeBody.innerHTML = innerHTML;
+
+                  const height = (iframeBody?.scrollHeight || 0) + 30;
+                  iframe.style.height = `${height}px`;
+                }
+              }
+
               await Zotero.HTTP.request(
                 "POST",
                 chatCompletionsUrl,
@@ -253,7 +270,7 @@ ${contentText}`,
 
                               if (Date.now() - lastResponseTime > 1000) {
                                 lastResponseTime = Date.now();
-                                updatePanel();
+                                updateIframe();
                               }
                             }
                           }
@@ -265,7 +282,7 @@ ${contentText}`,
                   },
                 }
               );
-              updatePanel();
+              updateIframe();
               isGenerating = false;
               setL10nArgs(`{ "status": "Loaded" }`);
               ztoolkit.log("Loaded!");
