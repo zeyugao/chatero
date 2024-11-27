@@ -268,7 +268,7 @@ ${contentText}`,
                             if (text) {
                               fullResponse += text;
 
-                              if (Date.now() - lastResponseTime > 1000) {
+                              if (Date.now() - lastResponseTime > 100) {
                                 lastResponseTime = Date.now();
                                 updateIframe();
                               }
