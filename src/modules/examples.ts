@@ -112,7 +112,7 @@ export class UIExampleFactory {
                             'Authorization': `Bearer ${apiKey}`,
                           },
                           body: JSON.stringify({
-                            model: 'yi-lightning',
+                            model: 'chatgpt-4o-latest',
                             stream: true,
                             messages: [
                               {
@@ -121,7 +121,7 @@ export class UIExampleFactory {
                               },
                               {
                                 role: "user",
-                                content: `请你帮我对这一篇论文进行一些总结：${contentText.slice(0, 100)}`,
+                                content: `请你帮我对这一篇论文进行一些总结：${contentText}`,
                               }
                             ]
                           }),
@@ -164,7 +164,6 @@ export class UIExampleFactory {
                                   if (parsedEvent.choices && parsedEvent.choices.length > 0) {
                                     const text = parsedEvent.choices[0].delta?.content || '';
                                     if (text) {
-                                      // const formattedText = text.replace(/\n/g, '<br>');
                                       fullResponse += text;
                                       body.innerHTML = md.render(fullResponse);
                                     }
