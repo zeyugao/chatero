@@ -63,7 +63,7 @@ export class UIExampleFactory {
           type: "test",
           icon: "chrome://zotero/skin/16/universal/retrieve-metadata.svg",
           l10nID: getLocaleID("item-section-generate-summary-button-tooltip"),
-          onClick: async ({ body, paneID, setL10nArgs }) => {
+          onClick: async ({ body, doc, paneID, setL10nArgs }) => {
 
             const showMessage = (message: string) => {
               new ztoolkit.ProgressWindow(config.addonName)
@@ -139,6 +139,7 @@ export class UIExampleFactory {
               let previousTextLength = 0;
               let responseBuffer = '';
               let fullResponse = '';
+              let lastResponseTime = Date.now();
               await Zotero.HTTP.request(
                 "POST",
                 chatCompletionsUrl,
@@ -150,10 +151,11 @@ export class UIExampleFactory {
                   body: JSON.stringify({
                     model: 'chatgpt-4o-latest',
                     stream: true,
+                    max_tokens: 4096,
                     messages: [
                       {
                         role: "system",
-                        content: "你是一个了解深度学习、人工智能、系统安全的大模型",
+                        content: "你是一个了解深度学习、人工智能、系统安全的大模型，我需要你的帮助来快速理解这篇论文的核心内容。",
                       },
                       {
                         role: "user",
@@ -169,7 +171,7 @@ export class UIExampleFactory {
 
 5. **具体方法**：详细说明论文中提出的方法、技术或实验设计的核心步骤，尽量具体化。
 
-请按照上述结构，对我将要提供的论文进行系统的总结和分析。以下是论文的内容：
+请按照上述结构，对我将要提供的论文进行系统的总结和分析，请使用中文来进行总结。以下是论文的内容：
 
 ${contentText}`,
                       }
@@ -212,8 +214,44 @@ ${contentText}`,
                             const text = parsedEvent.choices[0].delta?.content || '';
                             if (text) {
                               fullResponse += text;
-                              // body.innerHTML = md.render(fullResponse);
-                              body.textContent = fullResponse;
+
+                              if (Date.now() - lastResponseTime > 1000) {
+                                lastResponseTime = Date.now();
+
+                                const innerHTML = md.render(fullResponse);
+                                const iframe = ztoolkit.UI.createElement(doc, 'iframe', {
+                                });
+                                iframe.srcdoc = `
+                                <!DOCTYPE html>
+                                <html xmlns="http://www.w3.org/1999/xhtml">
+                                <head>
+                                  <style>
+                                    body {
+                                      font-family: sans-serif;
+                                      font-size: 12px;
+                                      }
+                                  </style>
+                                </head>
+                                <body>
+                                  ${innerHTML}
+                                </body>
+                                </html>`;
+                                iframe.style.border = 'none';
+                                iframe.style.width = '100%';
+
+                                if (body.firstChild) {
+                                  body.replaceChild(iframe, body.firstChild);
+                                }
+                                else {
+                                  body.appendChild(iframe);
+                                }
+
+                                setTimeout(() => {
+                                  const body = iframe.contentDocument?.body;
+                                  const height = (body?.scrollHeight || 0) + 100;
+                                  iframe.style.height = `${height}px`;
+                                }, 100);
+                              }
                             }
                           }
                         } catch (error) {
