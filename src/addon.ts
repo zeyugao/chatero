@@ -14,15 +14,15 @@ class Addon {
     };
     prefs?: {
       window: Window;
-      enableMarker: boolean;
-      marker: {
-        url: string;
-        apiKey: string;
-      };
-      openWebUI: {
-        url: string;
-        apiKey: string;
-      }
+      // enableMarker: boolean;
+      // marker: {
+      //   url: string;
+      //   apiKey: string;
+      // };
+      // openWebUI: {
+      //   url: string;
+      //   apiKey: string;
+      // }
     };
   };
   // Lifecycle hooks
