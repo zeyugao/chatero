@@ -1,9 +1,9 @@
 {
-  "name": "zotero-plugin-template",
+  "name": "chatero",
   "version": "3.0.1",
   "description": "Zotero Plugin Template",
   "config": {
-    "addonName": "Zotero Plugin Template",
+    "addonName": "Chatero",
     "addonID": "chatero@elsanna.me",
     "addonRef": "chatero",
     "addonInstance": "Chatero",

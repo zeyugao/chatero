@@ -29,6 +29,7 @@ const md = markdownit({
 
 export class UIExampleFactory {
   static async registerReaderItemPaneSection() {
+    let isGenerating = false;
     Zotero.ItemPaneManager.registerSection({
       paneID: "paper-summary",
       pluginID: config.addonID,
@@ -63,6 +64,17 @@ export class UIExampleFactory {
           icon: "chrome://zotero/skin/16/universal/retrieve-metadata.svg",
           l10nID: getLocaleID("item-section-generate-summary-button-tooltip"),
           onClick: async ({ body, item, paneID, setL10nArgs }) => {
+            if (isGenerating) {
+              new ztoolkit.ProgressWindow(config.addonName)
+                .createLine({
+                  text: "Already generating summary.",
+                  progress: 100,
+                })
+                .show();
+              return;
+            }
+            isGenerating = true;
+
             const reader = await ztoolkit.Reader.getReader();
 
             if (reader) {
@@ -82,7 +94,7 @@ export class UIExampleFactory {
                       while (openWebuiUrl.endsWith('/')) {
                         openWebuiUrl = openWebuiUrl.slice(0, -1);
                       }
-                      const chatCompletionsUrl = `${openWebuiUrl}/api/chat/completions`;
+                      const chatCompletionsUrl = `${openWebuiUrl}/chat/completions`;
                       ztoolkit.log({ contentText })
 
                       body.style.color = 'black';
@@ -134,6 +146,7 @@ export class UIExampleFactory {
                                 catch (error) {
                                   ztoolkit.log(error);
                                 }
+                                isGenerating = false;
                                 return;
                               }
 
@@ -142,6 +155,7 @@ export class UIExampleFactory {
                                 if (cleanedEvent === '[DONE]') {
                                   ztoolkit.log('Streaming finished.');
                                   setL10nArgs(`{ "status": "Loaded" }`);
+                                  isGenerating = false;
 
                                   return;
                                 }
@@ -163,6 +177,10 @@ export class UIExampleFactory {
                           },
                         }
                       );
+
+                      isGenerating = false;
+                      setL10nArgs(`{ "status": "Loaded" }`);
+                      ztoolkit.log("Loaded!");
                     } else {
                       new ztoolkit.ProgressWindow(config.addonName)
                         .createLine({
