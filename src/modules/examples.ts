@@ -1,5 +1,7 @@
 import { config } from "../../package.json";
 import { getLocaleID, getString } from "../utils/locale";
+import { getPref } from "../utils/prefs";
+import markdownit from 'markdown-it'
 
 export class BasicExampleFactory {
   static registerPrefs() {
@@ -18,37 +20,28 @@ declare namespace Zotero {
   }
 }
 
+const md = markdownit({
+  breaks: true, // 将行结束符\n转换为 <br> 标签
+  xhtmlOut: true, // 使用 /> 关闭标签，而不是 >
+  typographer: true,
+  html: true,
+})
+
 export class UIExampleFactory {
   static async registerReaderItemPaneSection() {
     Zotero.ItemPaneManager.registerSection({
-      paneID: "reader-example",
+      paneID: "paper-summary",
       pluginID: config.addonID,
       header: {
-        l10nID: getLocaleID("item-section-example2-head-text"),
+        l10nID: getLocaleID("item-section-paper-summary-head-text"),
         // Optional
-        l10nArgs: `{"status": "Initialized"}`,
+        l10nArgs: `{"status": "Idle"}`,
         // Can also have a optional dark icon
         icon: "chrome://zotero/skin/16/universal/book.svg",
       },
       sidenav: {
-        l10nID: getLocaleID("item-section-example2-sidenav-tooltip"),
+        l10nID: getLocaleID("item-section-paper-summary-sidenav-tooltip"),
         icon: "chrome://zotero/skin/20/universal/save.svg",
-      },
-      // Optional
-      bodyXHTML: '<html:h1 id="test">THIS IS TEST</html:h1>',
-      // Optional, Called when the section is first created, must be synchronous
-      onInit: ({ item }) => {
-        ztoolkit.log("Section init!", item?.id);
-      },
-      // Optional, Called when the section is destroyed, must be synchronous
-      onDestroy: (props) => {
-        ztoolkit.log("Section destroy!");
-      },
-      // Optional, Called when the section data changes (setting item/mode/tabType/inTrash), must be synchronous. return false to cancel the change
-      onItemChange: ({ item, setEnabled, tabType }) => {
-        ztoolkit.log(`Section item data changed to ${item?.id}`);
-        setEnabled(tabType === "reader");
-        return true;
       },
       // Called when the section is asked to render, must be synchronous.
       onRender: ({
@@ -58,68 +51,6 @@ export class UIExampleFactory {
         setSectionSummary,
         setSectionButtonStatus,
       }) => {
-        // ztoolkit.log("Section rendered!", item?.id);
-        // ztoolkit.log(item.toJSON());
-        // const title = body.querySelector("#test") as HTMLElement;
-        // title.style.color = "red";
-        // title.textContent = "LOADING";
-        // setL10nArgs(`{ "status": "Loading" }`);
-        // setSectionSummary("loading!");
-        // setSectionButtonStatus("test", { hidden: true });
-
-        (async () => {
-          const items = await Zotero.Items.getAll(item.libraryID);
-          // for (const item of items) {
-          //   ztoolkit.log(item.key);
-          // }
-
-          // const reader = await ztoolkit.Reader.getReader();
-          // ztoolkit.log({ _item: reader?._item });
-
-          // ztoolkit.log({ items });
-          // const filePath = item.getLocalFileURL();
-          // if (!filePath) return;
-          // const content = await Zotero.File.getContentsAsync(filePath);
-          // ztoolkit.log({ content });
-
-          const reader = await ztoolkit.Reader.getReader();
-
-          if (reader) {
-            const item = reader._item;
-
-
-            // const filePath = item.getLocalFileURL();
-            // const content = await Zotero.File.getContentsAsync(filePath);
-            // ztoolkit.log({ content });
-
-
-            if (item.isAttachment()) {
-              const contentType = item.attachmentContentType;
-              if (contentType === 'application/pdf') {
-                const content = await Zotero.PDFWorker.getFullText(item.id, null, false, '');
-                ztoolkit.log({ content });
-              }
-            }
-          }
-        })();
-      },
-      // Optional, can be asynchronous.
-      onAsyncRender: async ({
-        body,
-        item,
-        setL10nArgs,
-        setSectionSummary,
-        setSectionButtonStatus,
-      }) => {
-        // ztoolkit.log("Section secondary render start!", item?.id);
-        // await Zotero.Promise.delay(1000);
-        // ztoolkit.log("Section secondary render finish!", item?.id);
-        // const title = body.querySelector("#test") as HTMLElement;
-        // title.style.color = "green";
-        // title.textContent = item.getField("title");
-        // setL10nArgs(`{ "status": "Loaded" }`);
-        // setSectionSummary("rendered!");
-        // setSectionButtonStatus("test", { hidden: false });
       },
       // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
       onToggle: ({ item }) => {
@@ -129,11 +60,121 @@ export class UIExampleFactory {
       sectionButtons: [
         {
           type: "test",
-          icon: "chrome://zotero/skin/16/universal/empty-trash.svg",
-          l10nID: getLocaleID("item-section-example2-button-tooltip"),
-          onClick: ({ item, paneID }) => {
-            ztoolkit.log("Section clicked!", item?.id);
-            Zotero.ItemPaneManager.unregisterSection(paneID);
+          icon: "chrome://zotero/skin/16/universal/retrieve-metadata.svg",
+          l10nID: getLocaleID("item-section-generate-summary-button-tooltip"),
+          onClick: async ({ body, item, paneID, setL10nArgs }) => {
+            const reader = await ztoolkit.Reader.getReader();
+
+            if (reader) {
+              const item = reader._item;
+              if (item.isAttachment()) {
+                const contentType = item.attachmentContentType;
+                if (contentType === 'application/pdf') {
+                  const content = await Zotero.PDFWorker.getFullText(item.id, null, false, '');
+                  const contentText: string = content?.text;
+                  if (contentText) {
+                    // const result = body.querySelector("#chatero-result") as HTMLElement;
+                    // ztoolkit.log({ result });
+                    let openWebuiUrl = String(getPref('openWebuiUrl'));
+                    const apiKey = getPref('openWebuiApiKey') as string;
+
+                    if (openWebuiUrl) {
+                      while (openWebuiUrl.endsWith('/')) {
+                        openWebuiUrl = openWebuiUrl.slice(0, -1);
+                      }
+                      const chatCompletionsUrl = `${openWebuiUrl}/api/chat/completions`;
+                      ztoolkit.log({ contentText })
+
+                      body.style.color = 'black';
+                      setL10nArgs(`{ "status": "Loading" }`);
+
+                      let previousTextLength = 0;
+                      let responseBuffer = '';
+                      let fullResponse = '';
+                      await Zotero.HTTP.request(
+                        "POST",
+                        chatCompletionsUrl,
+                        {
+                          headers: {
+                            "Content-Type": "application/json",
+                            'Authorization': `Bearer ${apiKey}`,
+                          },
+                          body: JSON.stringify({
+                            model: 'yi-lightning',
+                            stream: true,
+                            messages: [
+                              {
+                                role: "system",
+                                content: "你是一个了解深度学习、人工智能、系统安全的大模型",
+                              },
+                              {
+                                role: "user",
+                                content: `请你帮我对这一篇论文进行一些总结：${contentText.slice(0, 100)}`,
+                              }
+                            ]
+                          }),
+                          responseType: "text",
+                          requestObserver: (xmlhttp: XMLHttpRequest) => {
+                            xmlhttp.onprogress = (e: any) => {
+                              const currentText = e.target.response;
+
+                              const newContent = currentText.slice(previousTextLength);
+                              previousTextLength = currentText.length;
+                              responseBuffer += newContent;
+                              const events = responseBuffer.split("\n\n");
+                              responseBuffer = events.pop() || '';
+
+                              if (responseBuffer.trim().startsWith('{')) {
+                                try {
+                                  const parsedEvent = JSON.parse(responseBuffer.trim());
+                                  if (parsedEvent.detail) {
+                                    body.textContent += parsedEvent.detail;
+                                  }
+                                }
+                                catch (error) {
+                                  ztoolkit.log(error);
+                                }
+                                return;
+                              }
+
+                              events.forEach(event => {
+                                const cleanedEvent = event.replace(/^\s*data: /, '').trim();
+                                if (cleanedEvent === '[DONE]') {
+                                  ztoolkit.log('Streaming finished.');
+                                  setL10nArgs(`{ "status": "Loaded" }`);
+
+                                  return;
+                                }
+                                try {
+                                  const parsedEvent = JSON.parse(cleanedEvent);
+                                  if (parsedEvent.choices && parsedEvent.choices.length > 0) {
+                                    const text = parsedEvent.choices[0].delta?.content || '';
+                                    if (text) {
+                                      // const formattedText = text.replace(/\n/g, '<br>');
+                                      fullResponse += text;
+                                      body.innerHTML = md.render(fullResponse);
+                                    }
+                                  }
+                                } catch (error) {
+                                  ztoolkit.log('Error parsing event:', error, event);
+                                }
+                              });
+                            };
+                          },
+                        }
+                      );
+                    } else {
+                      new ztoolkit.ProgressWindow(config.addonName)
+                        .createLine({
+                          text: "Please enable the WebUI URL option in the preferences.",
+                          progress: 100,
+                        })
+                        .show();
+                    }
+                  }
+                }
+              }
+            }
           },
         },
       ],
