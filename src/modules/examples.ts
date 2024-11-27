@@ -63,134 +63,173 @@ export class UIExampleFactory {
           type: "test",
           icon: "chrome://zotero/skin/16/universal/retrieve-metadata.svg",
           l10nID: getLocaleID("item-section-generate-summary-button-tooltip"),
-          onClick: async ({ body, item, paneID, setL10nArgs }) => {
-            if (isGenerating) {
+          onClick: async ({ body, paneID, setL10nArgs }) => {
+
+            const showMessage = (message: string) => {
               new ztoolkit.ProgressWindow(config.addonName)
                 .createLine({
-                  text: "Already generating summary.",
+                  text: "Please enable the WebUI URL option in the preferences.",
                   progress: 100,
                 })
                 .show();
+            }
+
+            if (isGenerating) {
+              showMessage("Already generating!");
               return;
             }
             isGenerating = true;
+            try {
+              const reader = await ztoolkit.Reader.getReader();
 
-            const reader = await ztoolkit.Reader.getReader();
-
-            if (reader) {
-              const item = reader._item;
-              if (item.isAttachment()) {
-                const contentType = item.attachmentContentType;
-                if (contentType === 'application/pdf') {
-                  const content = await Zotero.PDFWorker.getFullText(item.id, null, false, '');
-                  const contentText: string = content?.text;
-                  if (contentText) {
-                    // const result = body.querySelector("#chatero-result") as HTMLElement;
-                    // ztoolkit.log({ result });
-                    let openWebuiUrl = String(getPref('openWebuiUrl'));
-                    const apiKey = getPref('openWebuiApiKey') as string;
-
-                    if (openWebuiUrl) {
-                      while (openWebuiUrl.endsWith('/')) {
-                        openWebuiUrl = openWebuiUrl.slice(0, -1);
-                      }
-                      const chatCompletionsUrl = `${openWebuiUrl}/chat/completions`;
-                      ztoolkit.log({ contentText })
-
-                      body.style.color = 'black';
-                      setL10nArgs(`{ "status": "Loading" }`);
-
-                      let previousTextLength = 0;
-                      let responseBuffer = '';
-                      let fullResponse = '';
-                      await Zotero.HTTP.request(
-                        "POST",
-                        chatCompletionsUrl,
-                        {
-                          headers: {
-                            "Content-Type": "application/json",
-                            'Authorization': `Bearer ${apiKey}`,
-                          },
-                          body: JSON.stringify({
-                            model: 'chatgpt-4o-latest',
-                            stream: true,
-                            messages: [
-                              {
-                                role: "system",
-                                content: "你是一个了解深度学习、人工智能、系统安全的大模型",
-                              },
-                              {
-                                role: "user",
-                                content: `请你帮我对这一篇论文进行一些总结：${contentText}`,
-                              }
-                            ]
-                          }),
-                          responseType: "text",
-                          requestObserver: (xmlhttp: XMLHttpRequest) => {
-                            xmlhttp.onprogress = (e: any) => {
-                              const currentText = e.target.response;
-
-                              const newContent = currentText.slice(previousTextLength);
-                              previousTextLength = currentText.length;
-                              responseBuffer += newContent;
-                              const events = responseBuffer.split("\n\n");
-                              responseBuffer = events.pop() || '';
-
-                              if (responseBuffer.trim().startsWith('{')) {
-                                try {
-                                  const parsedEvent = JSON.parse(responseBuffer.trim());
-                                  if (parsedEvent.detail) {
-                                    body.textContent += parsedEvent.detail;
-                                  }
-                                }
-                                catch (error) {
-                                  ztoolkit.log(error);
-                                }
-                                isGenerating = false;
-                                return;
-                              }
-
-                              events.forEach(event => {
-                                const cleanedEvent = event.replace(/^\s*data: /, '').trim();
-                                if (cleanedEvent === '[DONE]') {
-                                  ztoolkit.log('Streaming finished.');
-                                  setL10nArgs(`{ "status": "Loaded" }`);
-                                  isGenerating = false;
-
-                                  return;
-                                }
-                                try {
-                                  const parsedEvent = JSON.parse(cleanedEvent);
-                                  if (parsedEvent.choices && parsedEvent.choices.length > 0) {
-                                    const text = parsedEvent.choices[0].delta?.content || '';
-                                    if (text) {
-                                      fullResponse += text;
-                                      body.innerHTML = md.render(fullResponse);
-                                    }
-                                  }
-                                } catch (error) {
-                                  ztoolkit.log('Error parsing event:', error, event);
-                                }
-                              });
-                            };
-                          },
-                        }
-                      );
-
-                      isGenerating = false;
-                      setL10nArgs(`{ "status": "Loaded" }`);
-                      ztoolkit.log("Loaded!");
-                    } else {
-                      new ztoolkit.ProgressWindow(config.addonName)
-                        .createLine({
-                          text: "Please enable the WebUI URL option in the preferences.",
-                          progress: 100,
-                        })
-                        .show();
-                    }
-                  }
-                }
+              if (!reader) {
+                showMessage("Reader not available!");
+                return;
               }
+
+              const item = reader._item;
+
+              if (!item.isAttachment()) {
+                showMessage("Not an attachment!");
+                return
+              }
+
+              const contentType = item.attachmentContentType;
+
+              let contentText: string | null = null;
+              if (contentType === 'application/pdf') {
+                const content = await Zotero.PDFWorker.getFullText(item.id, null, false, '');
+                contentText = content?.text;
+              } else if (contentType === 'text/plain') {
+                const filePath = item.getFilePath();
+                if (!filePath) {
+                  showMessage("Failed to get file path!");
+                  return;
+                }
+                const t = await Zotero.File.getContentsAsync(filePath);
+                if (!t) {
+                  showMessage("Failed to get file contents!");
+                  return;
+                }
+                contentText = t.toLocaleString();
+              }
+
+              if (!contentText) {
+                showMessage("Failed to extract text!");
+                return;
+              }
+
+              let openWebuiUrl = getPref('openWebuiUrl') as string;
+              const apiKey = getPref('openWebuiApiKey') as string;
+
+              if (!openWebuiUrl) {
+                showMessage("Please set the WebUI URL in the preferences.");
+                return;
+              }
+
+              while (openWebuiUrl.endsWith('/')) {
+                openWebuiUrl = openWebuiUrl.slice(0, -1);
+              }
+              const chatCompletionsUrl = `${openWebuiUrl}/chat/completions`;
+
+              body.style.color = 'black';
+              body.style.lineHeight = '2';
+              setL10nArgs(`{ "status": "Loading" }`);
+
+              let previousTextLength = 0;
+              let responseBuffer = '';
+              let fullResponse = '';
+              await Zotero.HTTP.request(
+                "POST",
+                chatCompletionsUrl,
+                {
+                  headers: {
+                    "Content-Type": "application/json",
+                    'Authorization': `Bearer ${apiKey}`,
+                  },
+                  body: JSON.stringify({
+                    model: 'chatgpt-4o-latest',
+                    stream: true,
+                    messages: [
+                      {
+                        role: "system",
+                        content: "你是一个了解深度学习、人工智能、系统安全的大模型",
+                      },
+                      {
+                        role: "user",
+                        content: `我正在阅读一篇学术论文，我需要你的帮助来快速理解这篇论文的核心内容。以下是我需要的信息，请按照下面的结构逐一总结：
+
+1. **研究的问题**：这篇论文针对的核心科学/技术问题是什么？作者试图解决什么样的挑战或回答什么样的问题？
+
+2. **现有技术的问题**：在这个领域，目前已经存在的方法或技术有哪些问题或局限性？是什么激发了这项研究的动机？
+
+3. **核心贡献**：这篇论文的主要贡献是什么？包括作者在理论、方法、实验或应用上的创新点。
+
+4. **解决方案概述**：这篇论文是如何尝试解决上述问题的？简要总结作者的方法或者提出的解决方案。
+
+5. **具体方法**：详细说明论文中提出的方法、技术或实验设计的核心步骤，尽量具体化。
+
+请按照上述结构，对我将要提供的论文进行系统的总结和分析。以下是论文的内容：
+
+${contentText}`,
+                      }
+                    ]
+                  }),
+                  responseType: "text",
+                  requestObserver: (xmlhttp: XMLHttpRequest) => {
+                    xmlhttp.onprogress = (e: any) => {
+                      const currentText = e.target.response;
+
+                      const newContent = currentText.slice(previousTextLength);
+                      previousTextLength = currentText.length;
+                      responseBuffer += newContent;
+                      const events = responseBuffer.split("\n\n");
+                      responseBuffer = events.pop() || '';
+
+                      if (responseBuffer.trim().startsWith('{')) {
+                        try {
+                          const parsedEvent = JSON.parse(responseBuffer.trim());
+                          if (parsedEvent.detail) {
+                            body.textContent += parsedEvent.detail;
+                          }
+                        }
+                        catch (error) {
+                          ztoolkit.log(error);
+                        }
+                        return;
+                      }
+
+                      events.forEach(event => {
+                        const cleanedEvent = event.replace(/^\s*data: /, '').trim();
+                        if (cleanedEvent === '[DONE]') {
+                          ztoolkit.log('Streaming finished.');
+                          setL10nArgs(`{ "status": "Loaded" }`);
+                          return;
+                        }
+                        try {
+                          const parsedEvent = JSON.parse(cleanedEvent);
+                          if (parsedEvent.choices && parsedEvent.choices.length > 0) {
+                            const text = parsedEvent.choices[0].delta?.content || '';
+                            if (text) {
+                              fullResponse += text;
+                              // body.innerHTML = md.render(fullResponse);
+                              body.textContent = fullResponse;
+                            }
+                          }
+                        } catch (error) {
+                          ztoolkit.log('Error parsing event:', error, event);
+                        }
+                      });
+                    };
+                  },
+                }
+              );
+
+              isGenerating = false;
+              setL10nArgs(`{ "status": "Loaded" }`);
+              ztoolkit.log("Loaded!");
+            } finally {
+              isGenerating = false;
             }
           },
         },
