@@ -136,6 +136,42 @@ export class UIExampleFactory {
               body.style.lineHeight = '2';
               setL10nArgs(`{ "status": "Loading" }`);
 
+              const updatePanel = () => {
+                const innerHTML = md.render(fullResponse);
+                const iframe = ztoolkit.UI.createElement(doc, 'iframe', {
+                });
+                iframe.srcdoc = `
+                <!DOCTYPE html>
+                <html xmlns="http://www.w3.org/1999/xhtml">
+                <head>
+                  <style>
+                    body {
+                      font-family: sans-serif;
+                      font-size: 12px;
+                      }
+                  </style>
+                </head>
+                <body>
+                  ${innerHTML}
+                </body>
+                </html>`;
+                iframe.style.border = 'none';
+                iframe.style.width = '100%';
+
+                if (body.firstChild) {
+                  body.replaceChild(iframe, body.firstChild);
+                }
+                else {
+                  body.appendChild(iframe);
+                }
+
+                setTimeout(() => {
+                  const body = iframe.contentDocument?.body;
+                  const height = (body?.scrollHeight || 0) + 30;
+                  iframe.style.height = `${height}px`;
+                }, 100);
+              }
+
               let previousTextLength = 0;
               let responseBuffer = '';
               let fullResponse = '';
@@ -217,40 +253,7 @@ ${contentText}`,
 
                               if (Date.now() - lastResponseTime > 1000) {
                                 lastResponseTime = Date.now();
-
-                                const innerHTML = md.render(fullResponse);
-                                const iframe = ztoolkit.UI.createElement(doc, 'iframe', {
-                                });
-                                iframe.srcdoc = `
-                                <!DOCTYPE html>
-                                <html xmlns="http://www.w3.org/1999/xhtml">
-                                <head>
-                                  <style>
-                                    body {
-                                      font-family: sans-serif;
-                                      font-size: 12px;
-                                      }
-                                  </style>
-                                </head>
-                                <body>
-                                  ${innerHTML}
-                                </body>
-                                </html>`;
-                                iframe.style.border = 'none';
-                                iframe.style.width = '100%';
-
-                                if (body.firstChild) {
-                                  body.replaceChild(iframe, body.firstChild);
-                                }
-                                else {
-                                  body.appendChild(iframe);
-                                }
-
-                                setTimeout(() => {
-                                  const body = iframe.contentDocument?.body;
-                                  const height = (body?.scrollHeight || 0) + 100;
-                                  iframe.style.height = `${height}px`;
-                                }, 100);
+                                updatePanel();
                               }
                             }
                           }
@@ -262,7 +265,7 @@ ${contentText}`,
                   },
                 }
               );
-
+              updatePanel();
               isGenerating = false;
               setL10nArgs(`{ "status": "Loaded" }`);
               ztoolkit.log("Loaded!");
