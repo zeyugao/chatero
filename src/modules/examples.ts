@@ -42,7 +42,7 @@ export class UIExampleFactory {
       },
       sidenav: {
         l10nID: getLocaleID("item-section-paper-summary-sidenav-tooltip"),
-        icon: "chrome://zotero/skin/20/universal/save.svg",
+        icon: "chrome://zotero/skin/16/universal/book.svg",
       },
       // Called when the section is asked to render, must be synchronous.
       onRender: ({
@@ -141,8 +141,7 @@ export class UIExampleFactory {
 
               const createIframe = () => {
                 const innerHTML = '<div>Loading...</div>';
-                iframe = ztoolkit.UI.createElement(doc, 'iframe', {
-                });
+                iframe = doc.createElement('iframe');
                 iframe.srcdoc = `
                 <!DOCTYPE html>
                 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -193,10 +192,11 @@ export class UIExampleFactory {
                 }
               }
 
-              await Zotero.HTTP.request(
+              const resp = await Zotero.HTTP.request(
                 "POST",
                 chatCompletionsUrl,
                 {
+                  successCodes: false,
                   headers: {
                     "Content-Type": "application/json",
                     'Authorization': `Bearer ${apiKey}`,
@@ -245,7 +245,7 @@ ${contentText}`,
                         try {
                           const parsedEvent = JSON.parse(responseBuffer.trim());
                           if (parsedEvent.detail) {
-                            body.textContent += parsedEvent.detail;
+                            fullResponse += '\n\n\n**Error:** ' + parsedEvent.detail;
                           }
                         }
                         catch (error) {
@@ -257,7 +257,6 @@ ${contentText}`,
                       events.forEach(event => {
                         const cleanedEvent = event.replace(/^\s*data: /, '').trim();
                         if (cleanedEvent === '[DONE]') {
-                          ztoolkit.log('Streaming finished.');
                           setL10nArgs(`{ "status": "Loaded" }`);
                           return;
                         }
@@ -282,10 +281,29 @@ ${contentText}`,
                   },
                 }
               );
+
+              if (resp.status !== 200) {
+                setL10nArgs(`{ "status": "Error" }`);
+
+                let content
+
+                try {
+                  const parsedEvent = JSON.parse(resp.responseText.trim());
+                  if (!parsedEvent.detail) {
+                    throw new Error('Not a detail error');
+                  }
+                }
+                catch (e) {
+                  content = resp.responseText ?? resp.statusText ?? resp.status;
+                }
+                if (content) {
+                  fullResponse += `\n\n\n**Error:** \`\`\`${content}\`\`\``;
+                }
+              }
+
               updateIframe();
               isGenerating = false;
               setL10nArgs(`{ "status": "Loaded" }`);
-              ztoolkit.log("Loaded!");
             } finally {
               isGenerating = false;
             }
