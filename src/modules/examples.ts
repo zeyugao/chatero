@@ -27,6 +27,30 @@ const md = markdownit({
   html: true,
 })
 
+const addContentToNote = async (
+  content: string,
+  libraryID: number,
+  {
+    parentID,
+    collectionID
+  }: {
+    parentID?: number,
+    collectionID?: number,
+  }
+  // parent: typeof Zotero.Item,
+) => {
+  let note = new Zotero.Item('note');
+  note.libraryID = libraryID;
+  if (parentID) {
+    note.parentID = parentID;
+  }
+  else if (collectionID) {
+    note.addToCollection(collectionID);
+  }
+  note.setNote(content);
+  await note.saveTx();
+}
+
 export class UIExampleFactory {
   static async registerReaderItemPaneSection() {
     let isGenerating = false;
@@ -60,10 +84,10 @@ export class UIExampleFactory {
       // Optional, Buttons to be shown in the section header
       sectionButtons: [
         {
-          type: "test",
+          type: "retrieve-metadata",
           icon: "chrome://zotero/skin/16/universal/retrieve-metadata.svg",
           l10nID: getLocaleID("item-section-generate-summary-button-tooltip"),
-          onClick: async ({ body, doc, paneID, setL10nArgs }) => {
+          onClick: async ({ body, doc, item: libraryItem, paneID, setL10nArgs, setSectionButtonStatus }) => {
 
             const showMessage = (message: string) => {
               new ztoolkit.ProgressWindow(config.addonName)
@@ -179,6 +203,7 @@ export class UIExampleFactory {
 
               let previousTextLength = 0;
               let responseBuffer = '';
+              let successed = false;
               let fullResponse = '';
               let lastResponseTime = Date.now();
 
@@ -196,13 +221,14 @@ export class UIExampleFactory {
                 "POST",
                 chatCompletionsUrl,
                 {
+                  timeout: 0,
                   successCodes: false,
                   headers: {
                     "Content-Type": "application/json",
                     'Authorization': `Bearer ${apiKey}`,
                   },
                   body: JSON.stringify({
-                    model: 'chatgpt-4o-latest',
+                    model: 'yi-lightning',
                     stream: true,
                     max_tokens: 4096,
                     messages: [
@@ -258,6 +284,7 @@ ${contentText}`,
                         const cleanedEvent = event.replace(/^\s*data: /, '').trim();
                         if (cleanedEvent === '[DONE]') {
                           setL10nArgs(`{ "status": "Loaded" }`);
+                          successed = true;
                           return;
                         }
                         try {
@@ -301,9 +328,22 @@ ${contentText}`,
                 }
               }
 
+              if (successed) {
+                if (item.parentID === libraryItem.id) {
+                  await addContentToNote(md.render(fullResponse), libraryItem.libraryID, { parentID: libraryItem.id });
+                  showMessage("Added to note!");
+                } else {
+                  showMessage("Skip add to note!");
+                }
+              }
+
               updateIframe();
-              isGenerating = false;
               setL10nArgs(`{ "status": "Loaded" }`);
+            } catch (error: unknown) {
+              const err = error as Error;
+              ztoolkit.log('Error:', err);
+              showMessage("Error: " + err.message);
+              setL10nArgs(`{ "status": "Error" }`);
             } finally {
               isGenerating = false;
             }
