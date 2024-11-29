@@ -51,9 +51,112 @@ const addContentToNote = async (
   await note.saveTx();
 }
 
+interface Message {
+  role: string;
+  content: string;
+}
+
+const showMessage = (message: string) => {
+  new ztoolkit.ProgressWindow(config.addonName)
+    .createLine({
+      text: message,
+      progress: 100,
+    })
+    .show();
+}
+
+
+interface IUploadFileResponse {
+  filename: string;
+  hash: string;
+  id: string;
+  error?: string;
+  meta: {
+    collection_name: string;
+    content_type: string;
+    name: string;
+    size: number;
+  };
+  updated_at: number;
+  user_id: string;
+}
+
+interface IFileRequest {
+  collection_name: string;
+  error: string;
+  file: IUploadFileResponse;
+  id: string;
+  name: string;
+  size: number;
+  status: string;
+  type: string;
+  url: string;
+}
+
+const constructFileRequest = (uploadedFile: IUploadFileResponse): IFileRequest => {
+  return {
+    collection_name: uploadedFile.meta.collection_name,
+    error: "",
+    file: uploadedFile,
+    id: uploadedFile.id,
+    name: uploadedFile.filename,
+    size: uploadedFile.meta.size,
+    status: "uploaded",
+    type: "file",
+    url: `/api/v1/files/${uploadedFile.id}`
+  }
+}
+
+const uploadFile = async (baseUrl: string, apiKey: string, fileName: string, content: string) => {
+  const url = `${baseUrl}/v1/files/`;
+  const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2, 15);
+  let formBody = `--${boundary}\r\n`
+  formBody += `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`
+  formBody += `Content-Type: application/octet-stream\r\n\r\n`
+  formBody += `${content}\r\n`
+  formBody += `--${boundary}--\r\n`
+
+  const headers = {
+    "Authorization": `Bearer ${apiKey}`,
+    "Content-Type": `multipart/form-data; boundary=${boundary}`,
+  };
+
+  try {
+    const response = await Zotero.HTTP.request('POST', url,
+      {
+        body: formBody,
+        headers,
+        followRedirects: true,
+        noCache: true,
+        successCodes: false,
+        timeout: 30000,
+      }
+    );
+    const responseText = response.responseText;
+    const resp = JSON.parse(responseText);
+    ztoolkit.log({ responseText, resp })
+    if (response.status !== 200) {
+      showMessage("Error: " + response.responseText);
+      return null;
+    }
+
+    if (resp.error) {
+      showMessage("Error: " + resp.error);
+      return null;
+    } else {
+      return resp as IUploadFileResponse;
+    }
+  } catch (error) {
+    ztoolkit.log('Error:', error);
+    return null;
+  }
+}
+
 export class UIExampleFactory {
   static async registerReaderItemPaneSection() {
     let isGenerating = false;
+    let messages: Message[] = [];
+
     Zotero.ItemPaneManager.registerSection({
       paneID: "paper-summary",
       pluginID: config.addonID,
@@ -76,6 +179,8 @@ export class UIExampleFactory {
         setSectionSummary,
         setSectionButtonStatus,
       }) => {
+        const canUpload = (messages && messages.length !== 0) && !isGenerating;
+        setSectionButtonStatus('upload-to-openwebui', { hidden: !canUpload, disabled: !canUpload, });
       },
       // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
       onToggle: ({ item }) => {
@@ -84,24 +189,22 @@ export class UIExampleFactory {
       // Optional, Buttons to be shown in the section header
       sectionButtons: [
         {
+          type: "upload-to-openwebui",
+          icon: "chrome://zotero/skin/16/universal/export.svg",
+          l10nID: getLocaleID("item-section-upload-to-openwebui-button-tooltip"),
+          onClick: async ({ body, doc, item: libraryItem, paneID, setL10nArgs, setSectionButtonStatus }) => {
+          },
+        },
+        {
           type: "retrieve-metadata",
-          icon: "chrome://zotero/skin/16/universal/retrieve-metadata.svg",
+          icon: "chrome://zotero/skin/16/universal/info.svg",
           l10nID: getLocaleID("item-section-generate-summary-button-tooltip"),
           onClick: async ({ body, doc, item: libraryItem, paneID, setL10nArgs, setSectionButtonStatus }) => {
-
-            const showMessage = (message: string) => {
-              new ztoolkit.ProgressWindow(config.addonName)
-                .createLine({
-                  text: "Please enable the WebUI URL option in the preferences.",
-                  progress: 100,
-                })
-                .show();
-            }
-
             if (isGenerating) {
               showMessage("Already generating!");
               return;
             }
+            setSectionButtonStatus('upload-to-openwebui', { hidden: true, disabled: true, });
             isGenerating = true;
             try {
               const reader = await ztoolkit.Reader.getReader();
@@ -154,6 +257,15 @@ export class UIExampleFactory {
               while (openWebuiUrl.endsWith('/')) {
                 openWebuiUrl = openWebuiUrl.slice(0, -1);
               }
+              const uploadedFile = await uploadFile(openWebuiUrl, apiKey, item.attachmentFilename + '.txt', contentText);
+
+              if (!uploadedFile) {
+                showMessage("Failed to upload file!");
+                return;
+              }
+
+              ztoolkit.log(uploadedFile)
+
               const chatCompletionsUrl = `${openWebuiUrl}/chat/completions`;
 
               body.style.color = 'black';
@@ -231,6 +343,7 @@ export class UIExampleFactory {
                     model: 'yi-lightning',
                     stream: true,
                     max_tokens: 4096,
+                    files: [constructFileRequest(uploadedFile)],
                     messages: [
                       {
                         role: "system",
@@ -238,7 +351,7 @@ export class UIExampleFactory {
                       },
                       {
                         role: "user",
-                        content: `我正在阅读一篇学术论文，我需要你的帮助来快速理解这篇论文的核心内容。以下是我需要的信息，请按照下面的结构逐一总结：
+                        content: `请你帮按照下面的结构逐一总结我对这篇论文的核心内容进行总结：
 
 1. **研究的问题**：这篇论文针对的核心科学/技术问题是什么？作者试图解决什么样的挑战或回答什么样的问题？
 
@@ -250,9 +363,7 @@ export class UIExampleFactory {
 
 5. **具体方法**：详细说明论文中提出的方法、技术或实验设计的核心步骤，尽量具体化。
 
-请按照上述结构，对我将要提供的论文进行系统的总结和分析，请使用中文来进行总结。以下是论文的内容：
-
-${contentText}`,
+请按照上述结构，对论文进行系统的总结和分析，请使用中文来进行总结。`,
                       }
                     ]
                   }),
@@ -335,6 +446,8 @@ ${contentText}`,
                 } else {
                   showMessage("Skip add to note!");
                 }
+
+                setSectionButtonStatus('upload-to-openwebui', { hidden: false, disabled: false, });
               }
 
               updateIframe();
