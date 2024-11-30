@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "markdown-it": "^14.1.0",
+    "uuid": "^11.0.3",
     "zotero-plugin-toolkit": "^4.0.9"
   },
   "devDependencies": {

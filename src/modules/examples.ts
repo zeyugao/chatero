@@ -1,6 +1,7 @@
 import { config } from "../../package.json";
 import { getLocaleID, getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
+import { v4 as uuidv4 } from 'uuid';
 import markdownit from 'markdown-it'
 
 export class BasicExampleFactory {
@@ -52,8 +53,12 @@ const addContentToNote = async (
 }
 
 interface Message {
-  role: string;
+  role: RoleType;
   content: string;
+}
+
+interface MessageWithFile extends Message {
+  files?: IFileRequest[];
 }
 
 const showMessage = (message: string) => {
@@ -152,6 +157,193 @@ const uploadFile = async (baseUrl: string, apiKey: string, fileName: string, con
   }
 }
 
+export type RoleType = 'user' | 'assistant' | 'system' | 'tool'
+
+interface HistoryItem {
+  id: string;
+  childrenIds: string[];
+  parentId: string | null;
+  content: string;
+  role: RoleType
+  timestamp: number;
+  files: IFileRequest[];
+  error?: string;
+
+  model?: string;
+  modelIdx?: number;
+  modelName?: string;
+
+  models?: string[];
+
+}
+
+// type History = { [key: string]: HistoryItem }
+interface History {
+  messages: { [key: string]: HistoryItem }
+  currentId: string | null;
+}
+
+const packChat = (messages: MessageWithFile[], model: string): History => {
+  let prevMessageId = null;
+  const historyMessages: { [key: string]: HistoryItem } = {}
+  for (const msg of messages) {
+    const message: HistoryItem = {
+      id: uuidv4(),
+      childrenIds: [],
+      parentId: prevMessageId,
+      content: msg.content,
+      role: msg.role,
+      timestamp: Date.now(),
+      files: msg.files || [],
+      ...(msg.role === 'assistant' ? {
+        model: model,
+        modelIdx: 0,
+        modelName: model,
+      } : {
+        models: [model],
+      })
+    }
+    prevMessageId = message.id;
+    historyMessages[message.id] = message;
+  }
+  return {
+    messages: historyMessages,
+    currentId: prevMessageId,
+  }
+}
+
+export function getSingleConversation(history: History, cursor: string | null): HistoryItem[] {
+  if (!cursor || !history.messages[cursor]) {
+    return []
+  }
+  let messages = []
+  while (cursor) {
+    messages.push(history.messages[cursor])
+    cursor = history.messages[cursor].parentId
+  }
+  return messages.reverse()
+}
+
+const addTag = async (
+  chatId: string,
+  tag: string,
+  user_id: string,
+  {
+    baseUrl,
+    apiKey
+  }: {
+    baseUrl: string,
+    apiKey: string
+  }) => {
+  const response = await Zotero.HTTP.request(
+    'POST',
+    `${baseUrl}/v1/chats/${chatId}/tags`,
+    {
+      body: JSON.stringify({
+        name: tag,
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      followRedirects: true,
+      noCache: true,
+      successCodes: false,
+      timeout: 30000,
+    }
+  );
+  ztoolkit.log({ response })
+}
+
+const postChat = async (
+  title: string,
+  messages: MessageWithFile[],
+  create: boolean,
+  { baseUrl,
+    apiKey
+  }: {
+    baseUrl: string,
+    apiKey: string
+  },
+  {
+    model,
+    userId,
+    chatId,
+  }: {
+    model: string,
+    userId: string,
+    chatId?: string,
+  }
+): Promise<string | null> => {
+  const history = packChat(messages, model);
+
+  const newChatData = {
+    title,
+    user_id: userId,
+    chat: {
+      history: history,
+      id: '',
+      messages: getSingleConversation(history, history.currentId),
+      models: [model],
+      params: {},
+      tags: [],
+      timestamp: Date.now(),
+      title,
+    }
+  };
+
+  try {
+    if (!create && !chatId) {
+      return null;
+    }
+    const url = create ? `${baseUrl}/v1/chats/new` : `${baseUrl}/v1/chats/${chatId}`
+
+    const response = await Zotero.HTTP.request(
+      'POST',
+      url,
+      {
+        body: JSON.stringify(newChatData),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        followRedirects: true,
+        noCache: true,
+        successCodes: false,
+        timeout: 30000,
+      }
+    );
+
+    if (response.status === 200) {
+      const resp = JSON.parse(response.responseText);
+      const newChatId = resp.id
+      return newChatId
+    } else {
+      showMessage("Error: " + response.responseText);
+      return null;
+    }
+  } catch (error) {
+    ztoolkit.log('Error:', error);
+    showMessage("Error: " + error);
+    return null;
+  }
+}
+
+const MODEL = 'yi-lightning';
+
+interface ChatCompletionsRequest {
+  files?: IFileRequest[];
+  messages: MessageWithFile[];
+}
+
+const constructChatCompletionsRequestFromMessage = (messages: MessageWithFile[]) => {
+  const chatCompletionsRequest: ChatCompletionsRequest = {
+    messages: messages,
+    files: messages.flatMap((msg) => msg.files || [])
+  }
+  return chatCompletionsRequest;
+}
+
 export class UIExampleFactory {
   static async registerReaderItemPaneSection() {
     let isGenerating = false;
@@ -206,6 +398,7 @@ export class UIExampleFactory {
             }
             setSectionButtonStatus('upload-to-openwebui', { hidden: true, disabled: true, });
             isGenerating = true;
+            setL10nArgs(`{ "status": "Loading" }`);
             try {
               const reader = await ztoolkit.Reader.getReader();
 
@@ -270,7 +463,6 @@ export class UIExampleFactory {
 
               body.style.color = 'black';
               body.style.lineHeight = '2';
-              setL10nArgs(`{ "status": "Loading" }`);
 
               let iframeBody: HTMLElement | undefined = undefined;
               let iframe: HTMLIFrameElement | undefined = undefined;
@@ -329,29 +521,14 @@ export class UIExampleFactory {
                 }
               }
 
-              const resp = await Zotero.HTTP.request(
-                "POST",
-                chatCompletionsUrl,
+              const messages = [
                 {
-                  timeout: 0,
-                  successCodes: false,
-                  headers: {
-                    "Content-Type": "application/json",
-                    'Authorization': `Bearer ${apiKey}`,
-                  },
-                  body: JSON.stringify({
-                    model: 'yi-lightning',
-                    stream: true,
-                    max_tokens: 4096,
-                    files: [constructFileRequest(uploadedFile)],
-                    messages: [
-                      {
-                        role: "system",
-                        content: "你是一个了解深度学习、人工智能、系统安全的大模型，我需要你的帮助来快速理解这篇论文的核心内容。",
-                      },
-                      {
-                        role: "user",
-                        content: `请你帮按照下面的结构逐一总结我对这篇论文的核心内容进行总结：
+                  role: "system",
+                  content: "你是一个了解深度学习、人工智能、系统安全的大模型，我需要你的帮助来快速理解这篇论文的核心内容。",
+                },
+                {
+                  role: "user",
+                  content: `请你帮按照下面的结构逐一总结我对这篇论文的核心内容进行总结：
 
 1. **研究的问题**：这篇论文针对的核心科学/技术问题是什么？作者试图解决什么样的挑战或回答什么样的问题？
 
@@ -364,8 +541,25 @@ export class UIExampleFactory {
 5. **具体方法**：详细说明论文中提出的方法、技术或实验设计的核心步骤，尽量具体化。
 
 请按照上述结构，对论文进行系统的总结和分析，请使用中文来进行总结。`,
-                      }
-                    ]
+                  files: [constructFileRequest(uploadedFile)],
+                }
+              ] as MessageWithFile[];
+
+              const resp = await Zotero.HTTP.request(
+                "POST",
+                chatCompletionsUrl,
+                {
+                  timeout: 0,
+                  successCodes: false,
+                  headers: {
+                    "Content-Type": "application/json",
+                    'Authorization': `Bearer ${apiKey}`,
+                  },
+                  body: JSON.stringify({
+                    model: MODEL,
+                    stream: true,
+                    max_tokens: 4096,
+                    ...constructChatCompletionsRequestFromMessage(messages),
                   }),
                   responseType: "text",
                   requestObserver: (xmlhttp: XMLHttpRequest) => {
@@ -441,10 +635,43 @@ export class UIExampleFactory {
 
               if (successed) {
                 if (item.parentID === libraryItem.id) {
-                  await addContentToNote(md.render(fullResponse), libraryItem.libraryID, { parentID: libraryItem.id });
+                  // await addContentToNote(md.render(fullResponse), libraryItem.libraryID, { parentID: libraryItem.id });
                   showMessage("Added to note!");
                 } else {
                   showMessage("Skip add to note!");
+                }
+
+                const fullMessages = [
+                  ...messages,
+                  {
+                    role: 'assistant',
+                    content: fullResponse,
+                  }
+                ] as MessageWithFile[];
+
+                const chatId = await postChat(
+                  item.parentItem?.getDisplayTitle() ?? item.getDisplayTitle(),
+                  fullMessages,
+                  true,
+                  {
+                    baseUrl: openWebuiUrl,
+                    apiKey,
+                  },
+                  {
+                    model: MODEL,
+                    userId: uploadedFile.user_id,
+                  }
+                )
+                if (chatId) {
+                  await addTag(
+                    chatId,
+                    'zotero',
+                    uploadedFile.user_id,
+                    {
+                      baseUrl: openWebuiUrl,
+                      apiKey,
+                    }
+                  );
                 }
 
                 setSectionButtonStatus('upload-to-openwebui', { hidden: false, disabled: false, });
