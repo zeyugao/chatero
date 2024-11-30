@@ -635,7 +635,7 @@ export class UIExampleFactory {
 
               if (successed) {
                 if (item.parentID === libraryItem.id) {
-                  // await addContentToNote(md.render(fullResponse), libraryItem.libraryID, { parentID: libraryItem.id });
+                  await addContentToNote(md.render(fullResponse), libraryItem.libraryID, { parentID: libraryItem.id });
                   showMessage("Added to note!");
                 } else {
                   showMessage("Skip add to note!");
@@ -672,6 +672,8 @@ export class UIExampleFactory {
                       apiKey,
                     }
                   );
+                } else {
+                  showMessage("Failed to create chat in Open WebUI!");
                 }
 
                 setSectionButtonStatus('upload-to-openwebui', { hidden: false, disabled: false, });
