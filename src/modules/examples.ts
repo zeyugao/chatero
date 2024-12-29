@@ -558,6 +558,8 @@ export class UIExampleFactory {
                     model: MODEL,
                     stream: true,
                     max_tokens: 4096,
+                    temperature: 0.6,
+                    top_p: 0.95,
                     ...constructChatCompletionsRequestFromMessage(messages),
                   }),
                   responseType: "text",
