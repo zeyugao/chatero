@@ -29,6 +29,21 @@ Prompt 是随便让 GPT 生成的一个 Prompt，感觉结果也还可以就直�
 
 现在还不支持用 Marker 去提取文本，而是用 Zotero 自己的提取文本的接口获取论文的内容，也没有自动化地去掉参考文献的部分。
 
+## Installation
+
+没有打包，只能通过源码安装。
+
+```bash
+npm install
+npm start
+```
+
+就会开启来一个调试用的 Zotero，然后把他关掉，正常启动 Zotero 也会带上这个插件了。
+
+如果没有显示，可以试试 (Zotero Plugin Development)[https://www.zotero.org/support/dev/client_coding/plugin_development] 里面的
+
+> Open prefs.js in the Zotero profile directory in a text editor and delete the lines containing extensions.lastAppBuildId and extensions.lastAppVersion. Save the file and restart Zotero. This will force Zotero to read the 'extensions' directory and install your plugin from source, after which you should see it listed in Tools → Add-ons. This is only necessary once.
+
 # Credit & Usage
 
 基于 [zotero-plugin-template](https://github.com/windingwind/zotero-plugin-template) 进行开发。如何使用请参考模版里面的文档。
