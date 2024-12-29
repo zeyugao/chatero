@@ -10,6 +10,9 @@ pref-use-marker =
 pref-marker-url = Base URL
 pref-marker-api-key = API Key
 
-pref-webui-settings = WebUI Settings
+pref-webui-settings = Open WebUI Settings
 pref-open-webui-url = Base URL
 pref-open-webui-api-key = API Key
+
+pref-model-choice = Model Choice
+pref-model-settings = Model Settings

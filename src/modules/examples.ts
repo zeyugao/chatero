@@ -329,8 +329,6 @@ const postChat = async (
   }
 }
 
-const MODEL = 'yi-lightning';
-
 interface ChatCompletionsRequest {
   files?: IFileRequest[];
   messages: MessageWithFile[];
@@ -441,6 +439,7 @@ export class UIExampleFactory {
 
               let openWebuiUrl = getPref('openWebuiUrl') as string;
               const apiKey = getPref('openWebuiApiKey') as string;
+              const MODEL = getPref('modelChoice') as string;
 
               if (!openWebuiUrl) {
                 showMessage("Please set the WebUI URL in the preferences.");
