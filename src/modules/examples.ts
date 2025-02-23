@@ -84,6 +84,9 @@ interface IUploadFileResponse {
   };
   updated_at: number;
   user_id: string;
+  data: {
+    content: string;
+  }
 }
 
 interface IFileRequest {
@@ -449,14 +452,6 @@ export class UIExampleFactory {
               while (openWebuiUrl.endsWith('/')) {
                 openWebuiUrl = openWebuiUrl.slice(0, -1);
               }
-              const uploadedFile = await uploadFile(openWebuiUrl, apiKey, item.attachmentFilename + '.txt', contentText);
-
-              if (!uploadedFile) {
-                showMessage("Failed to upload file!");
-                return;
-              }
-
-              ztoolkit.log(uploadedFile)
 
               const chatCompletionsUrl = `${openWebuiUrl}/chat/completions`;
 
@@ -543,8 +538,10 @@ export class UIExampleFactory {
 
 5. **具体方法**：详细说明论文中提出的方法、技术或实验设计的核心步骤，尽量具体化。
 
-请按照上述结构，对论文进行系统的总结和分析，请使用中文来进行总结。`,
-                  files: [constructFileRequest(uploadedFile)],
+请按照上述结构，对论文进行系统的总结和分析，请使用中文来进行总结。
+
+${contentText}
+`,
                 }
               ] as MessageWithFile[];
 
@@ -645,43 +642,6 @@ export class UIExampleFactory {
                 } else {
                   showMessage("Skip add to note!");
                 }
-
-                const fullMessages = [
-                  ...messages,
-                  {
-                    role: 'assistant',
-                    content: fullResponse,
-                  }
-                ] as MessageWithFile[];
-
-                const chatId = await postChat(
-                  item.parentItem?.getDisplayTitle() ?? item.getDisplayTitle(),
-                  fullMessages,
-                  true,
-                  {
-                    baseUrl: openWebuiUrl,
-                    apiKey,
-                  },
-                  {
-                    model: MODEL,
-                    userId: uploadedFile.user_id,
-                  }
-                )
-                if (chatId) {
-                  await addTag(
-                    chatId,
-                    'zotero',
-                    uploadedFile.user_id,
-                    {
-                      baseUrl: openWebuiUrl,
-                      apiKey,
-                    }
-                  );
-                } else {
-                  showMessage("Failed to create chat in Open WebUI!");
-                }
-
-                setSectionButtonStatus('upload-to-openwebui', { hidden: false, disabled: false, });
               }
 
               updateIframe();
