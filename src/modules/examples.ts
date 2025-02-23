@@ -478,6 +478,10 @@ export class UIExampleFactory {
                       font-family: sans-serif;
                       font-size: 12px;
                       }
+
+                    ul, ol {
+                      padding-inline-start: 10px;
+                    }
                   </style>
                 </head>
                 <body>
