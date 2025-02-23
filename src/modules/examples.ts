@@ -400,15 +400,14 @@ export class UIExampleFactory {
             setSectionButtonStatus('upload-to-openwebui', { hidden: true, disabled: true, });
             generatingMap.set(libraryItem.id, true);
             setL10nArgs(`{ "status": "Loading" }`);
+            ztoolkit.log(libraryItem);
             try {
-              const reader = await ztoolkit.Reader.getReader();
+              const item = await libraryItem.getBestAttachment();
 
-              if (!reader) {
-                showMessage("Reader not available!");
+              if (!item) {
+                showMessage("No attachment!");
                 return;
               }
-
-              const item = reader._item;
 
               if (!item.isAttachment()) {
                 showMessage("Not an attachment!");
