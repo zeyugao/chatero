@@ -347,7 +347,7 @@ const constructChatCompletionsRequestFromMessage = (messages: MessageWithFile[])
 
 export class UIExampleFactory {
   static async registerReaderItemPaneSection() {
-    let isGenerating = false;
+    let generatingMap = new Map<number, boolean>();
     let messages: Message[] = [];
 
     Zotero.ItemPaneManager.registerSection({
@@ -372,7 +372,7 @@ export class UIExampleFactory {
         setSectionSummary,
         setSectionButtonStatus,
       }) => {
-        const canUpload = (messages && messages.length !== 0) && !isGenerating;
+        const canUpload = (messages && messages.length !== 0) && !generatingMap.get(item.id);
         setSectionButtonStatus('upload-to-openwebui', { hidden: !canUpload, disabled: !canUpload, });
       },
       // Optional, Called when the section is toggled. Can happen anytime even if the section is not visible or not rendered
@@ -393,12 +393,12 @@ export class UIExampleFactory {
           icon: "chrome://zotero/skin/16/universal/info.svg",
           l10nID: getLocaleID("item-section-generate-summary-button-tooltip"),
           onClick: async ({ body, doc, item: libraryItem, paneID, setL10nArgs, setSectionButtonStatus }) => {
-            if (isGenerating) {
+            if (generatingMap.get(libraryItem.id)) {
               showMessage("Already generating!");
               return;
             }
             setSectionButtonStatus('upload-to-openwebui', { hidden: true, disabled: true, });
-            isGenerating = true;
+            generatingMap.set(libraryItem.id, true);
             setL10nArgs(`{ "status": "Loading" }`);
             try {
               const reader = await ztoolkit.Reader.getReader();
@@ -652,7 +652,7 @@ ${contentText}
               showMessage("Error: " + err.message);
               setL10nArgs(`{ "status": "Error" }`);
             } finally {
-              isGenerating = false;
+              generatingMap.delete(libraryItem.id);
             }
           },
         },
